@@ -47,11 +47,11 @@ export const CustomPeriodStats: React.FC<CustomPeriodStatsProps> = ({entries}) =
         <div className="grid gap-4 py-4">
           <div className="flex flex-col gap-2">
             <div className="flex flex-col gap-2">
-              <DatePicker />
+              {/*<DatePicker />*/}
             </div>
             <div className="flex flex-col gap-2">
-              <Label htmlFor="end-date">End Date</Label>
-              <DatePicker id="end-date" selected={endDate} onSelect={setEndDate} placeholder="Select end date"/>
+              {/*<Label htmlFor="end-date">End Date</Label>*/}
+              {/*<DatePicker id="end-date" selected={endDate} onSelect={setEndDate} placeholder="Select end date"/>*/}
             </div>
           </div>
           <div className="flex flex-col gap-2">
