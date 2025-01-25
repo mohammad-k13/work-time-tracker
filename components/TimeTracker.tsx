@@ -3,8 +3,8 @@ import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { formatTime } from "../utils/timeUtils"
-import type { TimeEntry } from "../types/timeEntry"
+import { formatTime } from "@/utils/timeUtils"
+import type { TimeEntry } from "@/types/timeEntry"
 
 interface TimeTrackerProps {
   onSave: (entry: Omit<TimeEntry, "id">) => void
@@ -20,44 +20,9 @@ export const TimeTracker: React.FC<TimeTrackerProps> = ({ onSave }) => {
   const intervalRef = useRef<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
-    const storedState = localStorage.getItem("timeTrackerState")
-    if (storedState) {
-      const { isTracking, isPaused, task, description, startTime, duration } = JSON.parse(storedState)
-      setIsTracking(isTracking)
-      setIsPaused(isPaused)
-      setTask(task)
-      setDescription(description)
-      setStartTime(startTime ? new Date(startTime) : null)
-      setDuration(duration)
-    }
-  }, [])
-
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (!document.hidden && isTracking && !isPaused) {
-        const storedState = localStorage.getItem("timeTrackerState")
-        if (storedState) {
-          const { startTime, duration } = JSON.parse(storedState)
-          const elapsedTime = Math.floor((Date.now() - new Date(startTime).getTime()) / 1000)
-          setDuration(elapsedTime)
-        }
-      }
-    }
-
-    document.addEventListener("visibilitychange", handleVisibilityChange)
-    return () => {
-      document.removeEventListener("visibilitychange", handleVisibilityChange)
-    }
-  }, [isTracking, isPaused])
-
-  useEffect(() => {
     if (isTracking && !isPaused) {
       intervalRef.current = setInterval(() => {
-        setDuration((prev) => {
-          const newDuration = prev + 1
-          updateLocalStorage(newDuration)
-          return newDuration
-        })
+        setDuration((prev) => prev + 1)
       }, 1000)
     } else {
       if (intervalRef.current) {
@@ -71,37 +36,19 @@ export const TimeTracker: React.FC<TimeTrackerProps> = ({ onSave }) => {
     }
   }, [isTracking, isPaused])
 
-  const updateLocalStorage = (currentDuration: number) => {
-    localStorage.setItem(
-      "timeTrackerState",
-      JSON.stringify({
-        isTracking,
-        isPaused,
-        task,
-        description,
-        startTime: startTime?.toISOString(),
-        duration: currentDuration,
-      }),
-    )
-  }
-
   const handleStart = () => {
-    const newStartTime = new Date()
     setIsTracking(true)
     setIsPaused(false)
-    setStartTime(newStartTime)
+    setStartTime(new Date())
     setDuration(0)
-    updateLocalStorage(0)
   }
 
   const handlePause = () => {
     setIsPaused(true)
-    updateLocalStorage(duration)
   }
 
   const handleContinue = () => {
     setIsPaused(false)
-    updateLocalStorage(duration)
   }
 
   const handleStop = () => {
@@ -120,7 +67,6 @@ export const TimeTracker: React.FC<TimeTrackerProps> = ({ onSave }) => {
       setDescription("")
       setStartTime(null)
       setDuration(0)
-      localStorage.removeItem("timeTrackerState")
     }
   }
 
@@ -129,19 +75,13 @@ export const TimeTracker: React.FC<TimeTrackerProps> = ({ onSave }) => {
       <Input
         type="text"
         value={task}
-        onChange={(e) => {
-          setTask(e.target.value)
-          updateLocalStorage(duration)
-        }}
+        onChange={(e) => setTask(e.target.value)}
         placeholder="What are you working on?"
         disabled={isTracking}
       />
       <Textarea
         value={description}
-        onChange={(e) => {
-          setDescription(e.target.value)
-          updateLocalStorage(duration)
-        }}
+        onChange={(e) => setDescription(e.target.value)}
         placeholder="Add a description (optional)"
         disabled={isTracking}
       />

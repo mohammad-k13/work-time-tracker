@@ -1,31 +1,41 @@
 "use client"
 
-import React, {useState, useEffect} from "react"
-import {v4 as uuidv4} from "uuid"
-import {TimeTracker} from "../components/TimeTracker"
-import {TimeTable} from "../components/TimeTable"
-import {TimeChart} from "../components/TimeChart"
-import type {TimeEntry} from "../types/timeEntry"
-import {saveEntries, loadEntries} from "../utils/timeUtils"
-import {Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter} from "@/components/ui/dialog"
-import {Button} from "@/components/ui/button"
-import {Input} from "@/components/ui/input"
-import {Textarea} from "@/components/ui/textarea"
-import {CustomPeriodStats} from "../components/CustomPeriodStats"
+import React, { useState, useEffect } from "react"
+import { v4 as uuidv4 } from "uuid"
+import { TimeTracker } from "../components/TimeTracker"
+import { TimeTable } from "../components/TimeTable"
+import { TimeChart } from "../components/TimeChart"
+import type { TimeEntry } from "../types/timeEntry"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
+import { CustomPeriodStats } from "../components/CustomPeriodStats"
 
 export default function Home() {
   const [entries, setEntries] = useState<TimeEntry[]>([])
   const [editingEntry, setEditingEntry] = useState<TimeEntry | null>(null)
 
   useEffect(() => {
-    setEntries(loadEntries())
+    fetchEntries()
   }, [])
 
-  const handleSave = (entry: Omit<TimeEntry, "id">) => {
-    const newEntry = {...entry, id: uuidv4()}
-    const updatedEntries = [...entries, newEntry]
-    setEntries(updatedEntries)
-    saveEntries(updatedEntries)
+  const fetchEntries = async () => {
+    const response = await fetch("/api/timeEntries")
+    const data = await response.json()
+    setEntries(data)
+  }
+
+  const handleSave = async (entry: Omit<TimeEntry, "id">) => {
+    const response = await fetch("/api/timeEntries", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(entry),
+    })
+    const savedEntry = await response.json()
+    setEntries([...entries, savedEntry])
   }
 
   const handleEdit = (id: string) => {
@@ -35,24 +45,31 @@ export default function Home() {
     }
   }
 
-  const handleDelete = (id: string) => {
-    const updatedEntries = entries.filter((entry) => entry.id !== id)
-    setEntries(updatedEntries)
-    saveEntries(updatedEntries)
+  const handleDelete = async (id: string) => {
+    await fetch(`/api/timeEntries/${id}`, {
+      method: "DELETE",
+    })
+    setEntries(entries.filter((entry) => entry.id !== id))
   }
 
-  const handleUpdateEntry = (updatedEntry: TimeEntry) => {
-    const updatedEntries = entries.map((entry) => (entry.id === updatedEntry.id ? updatedEntry : entry))
-    setEntries(updatedEntries)
-    saveEntries(updatedEntries)
+  const handleUpdateEntry = async (updatedEntry: TimeEntry) => {
+    const response = await fetch(`/api/timeEntries/${updatedEntry.id}`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(updatedEntry),
+    })
+    const updated = await response.json()
+    setEntries(entries.map((entry) => (entry.id === updated.id ? updated : entry)))
     setEditingEntry(null)
   }
 
   return (
     <main className="container mx-auto p-4 space-y-8">
       <h1 className="text-3xl font-bold">Time Tracker App</h1>
-      <TimeTracker onSave={handleSave}/>
-      <TimeTable entries={entries} onEdit={handleEdit} onDelete={handleDelete}/>
+      <TimeTracker onSave={handleSave} />
+      <TimeTable entries={entries} onEdit={handleEdit} onDelete={handleDelete} />
       {/*<TimeChart entries={entries} />*/}
 
       <Dialog open={!!editingEntry} onOpenChange={() => setEditingEntry(null)}>
@@ -70,12 +87,12 @@ export default function Home() {
               <div className="space-y-4">
                 <Input
                   value={editingEntry.task}
-                  onChange={(e) => setEditingEntry({...editingEntry, task: e.target.value})}
+                  onChange={(e) => setEditingEntry({ ...editingEntry, task: e.target.value })}
                   placeholder="Task"
                 />
                 <Textarea
-                  value={editingEntry.description}
-                  onChange={(e) => setEditingEntry({...editingEntry, description: e.target.value})}
+                  value={editingEntry.description || ""}
+                  onChange={(e) => setEditingEntry({ ...editingEntry, description: e.target.value })}
                   placeholder="Description"
                 />
               </div>
@@ -87,7 +104,7 @@ export default function Home() {
         </DialogContent>
       </Dialog>
       {/*<div className="flex justify-end">*/}
-      {/*  <CustomPeriodStats entries={entries}/>*/}
+      {/*  <CustomPeriodStats entries={entries} />*/}
       {/*</div>*/}
     </main>
   )
