@@ -19,7 +19,7 @@ export async function PUT(request: Request, context: any) {
   return NextResponse.json(entry);
 }
 
-export async function DELETE(request: Request, context: { params: { id: string } }) {
+export async function DELETE(request: Request, context: any) {
   const { params } = context; // Accessing params from context
 
   await prisma.timeEntry.delete({
