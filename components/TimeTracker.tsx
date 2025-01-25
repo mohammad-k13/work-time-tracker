@@ -28,7 +28,7 @@ export const TimeTracker: React.FC<TimeTrackerProps> = ({ onSave }) => {
       setTask(task)
       setDescription(description)
       setStartTime(startTime ? new Date(startTime) : null)
-      setDuration(duration)
+      setDuration(isTracking ? duration : 0) // Reset duration to 0 if not tracking
     }
   }, [])
 
@@ -42,6 +42,7 @@ export const TimeTracker: React.FC<TimeTrackerProps> = ({ onSave }) => {
     }
 
     if (isTracking && !isPaused) {
+      updateTimer() // Update immediately
       intervalRef.current = setInterval(updateTimer, 1000)
     } else {
       if (intervalRef.current) {
@@ -90,7 +91,7 @@ export const TimeTracker: React.FC<TimeTrackerProps> = ({ onSave }) => {
     setIsTracking(true)
     setIsPaused(false)
     setStartTime(now)
-    setDuration(0)
+    setDuration(0) // Ensure duration is reset to 0
   }
 
   const handlePause = () => {
