@@ -1,187 +1,115 @@
 "use client"
 
 import type React from "react"
-import { useState, useEffect, useRef } from "react"
-import { Button } from "@/components/ui/button"
+import { useState } from "react"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
-import { formatTime } from "../utils/timeUtils"
+import { Button } from "@/components/ui/button"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import type { TimeEntry } from "../types/timeEntry"
-import { Loader2 } from "lucide-react"
+import { formatDate, formatTime } from "../utils/timeUtils"
+import { Pencil, Trash2, Loader2 } from "lucide-react"
 
-interface TimeTrackerProps {
-  onSave: (entry: Omit<TimeEntry, "id">) => Promise<void>
+interface TimeTableProps {
+  entries: TimeEntry[]
+  onEdit: (id: string) => void
+  onDelete: (id: string) => Promise<void>
 }
 
-export const TimeTracker: React.FC<TimeTrackerProps> = ({ onSave }) => {
-  const [isTracking, setIsTracking] = useState(false)
-  const [isPaused, setIsPaused] = useState(false)
-  const [task, setTask] = useState("")
-  const [description, setDescription] = useState("")
-  const [startTime, setStartTime] = useState<Date | null>(null)
-  const [duration, setDuration] = useState(0)
-  const [isSaving, setIsSaving] = useState(false)
-  const intervalRef = useRef<NodeJS.Timeout | null>(null)
-  const [accumulatedDuration, setAccumulatedDuration] = useState(0)
+export const TimeTable: React.FC<TimeTableProps> = ({ entries, onEdit, onDelete }) => {
+  const [filter, setFilter] = useState("")
+  const [sortBy, setSortBy] = useState<keyof TimeEntry>("startTime")
+  const [deletingId, setDeletingId] = useState<string | null>(null)
 
-  useEffect(() => {
-    const storedState = localStorage.getItem("timeTrackerState")
-    if (storedState) {
-      const { isTracking, isPaused, task, description, startTime, duration, accumulatedDuration } =
-        JSON.parse(storedState)
-      setIsTracking(isTracking)
-      setIsPaused(isPaused)
-      setTask(task)
-      setDescription(description)
-      setStartTime(startTime ? new Date(startTime) : null)
-      setDuration(isTracking ? duration : 0)
-      setAccumulatedDuration(accumulatedDuration || 0)
-    }
-  }, [])
+  const filteredEntries = entries.filter(
+    (entry) =>
+      entry.task.toLowerCase().includes(filter.toLowerCase()) ||
+      entry.description?.toLowerCase().includes(filter.toLowerCase()),
+  )
 
-  useEffect(() => {
-    const updateTimer = () => {
-      if (isTracking && !isPaused && startTime) {
-        const now = new Date()
-        const elapsedSeconds = Math.floor((now.getTime() - new Date(startTime).getTime()) / 1000)
-        setDuration(accumulatedDuration + elapsedSeconds)
-      }
-    }
+  const sortedEntries = [...filteredEntries].sort((a, b) => (a[sortBy] > b[sortBy] ? 1 : -1))
 
-    if (isTracking && !isPaused) {
-      updateTimer() // Update immediately
-      intervalRef.current = setInterval(updateTimer, 1000)
-    } else {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current)
-      }
-    }
-
-    return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current)
-      }
-    }
-  }, [isTracking, isPaused, startTime, accumulatedDuration])
-
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (!document.hidden && isTracking && !isPaused && startTime) {
-        const now = new Date()
-        const elapsedSeconds = Math.floor((now.getTime() - new Date(startTime).getTime()) / 1000)
-        setDuration(accumulatedDuration + elapsedSeconds)
-      }
-    }
-
-    document.addEventListener("visibilitychange", handleVisibilityChange)
-    return () => {
-      document.removeEventListener("visibilitychange", handleVisibilityChange)
-    }
-  }, [isTracking, isPaused, startTime, accumulatedDuration])
-
-  useEffect(() => {
-    localStorage.setItem(
-      "timeTrackerState",
-      JSON.stringify({
-        isTracking,
-        isPaused,
-        task,
-        description,
-        startTime: startTime?.toISOString(),
-        duration,
-        accumulatedDuration,
-      }),
-    )
-  }, [isTracking, isPaused, task, description, startTime, duration, accumulatedDuration])
-
-  const handleStart = () => {
-    const now = new Date()
-    setIsTracking(true)
-    setIsPaused(false)
-    setStartTime(now)
-    setDuration(0)
-    setAccumulatedDuration(0)
-  }
-
-  const handlePause = () => {
-    setIsPaused(true)
-    setAccumulatedDuration(duration)
-  }
-
-  const handleContinue = () => {
-    setIsPaused(false)
-    setStartTime(new Date())
-  }
-
-  const handleStop = async () => {
-    setIsTracking(false)
-    setIsPaused(false)
-    if (startTime) {
-      const endTime = new Date()
-      setIsSaving(true)
+  const handleDelete = async (id: string) => {
+    const confirmDelete = window.confirm("Are you sure you want to delete this time entry?")
+    if (confirmDelete) {
+      setDeletingId(id)
       try {
-        await onSave({
-          task,
-          description,
-          startTime: startTime.toISOString(),
-          endTime: endTime.toISOString(),
-          duration,
-        })
+        await onDelete(id)
       } finally {
-        setIsSaving(false)
+        setDeletingId(null)
       }
-      setTask("")
-      setDescription("")
-      setStartTime(null)
-      setDuration(0)
-      setAccumulatedDuration(0)
-      localStorage.removeItem("timeTrackerState")
     }
   }
 
   return (
-    <div className="flex flex-col space-y-4 p-6 border rounded-lg bg-white shadow-lg">
-      <Input
-        type="text"
-        value={task}
-        onChange={(e) => setTask(e.target.value)}
-        placeholder="What are you working on?"
-        disabled={isTracking}
-        className="border-blue-300 focus:ring-blue-500 focus:border-blue-500"
-      />
-      <Textarea
-        value={description}
-        onChange={(e) => setDescription(e.target.value)}
-        placeholder="Add a description (optional)"
-        disabled={isTracking}
-        className="border-blue-300 focus:ring-blue-500 focus:border-blue-500"
-      />
-      <div className="flex justify-between items-center bg-blue-50 p-4 rounded-lg">
-        <span className="text-3xl font-bold font-mono text-blue-600">{formatTime(duration)}</span>
-        <div className="space-x-2">
-          {!isTracking && (
-            <Button onClick={handleStart} className="bg-green-500 hover:bg-green-600">
-              Start
-            </Button>
-          )}
-          {isTracking && !isPaused && (
-            <Button onClick={handlePause} className="bg-yellow-500 hover:bg-yellow-600">
-              Pause
-            </Button>
-          )}
-          {isTracking && isPaused && (
-            <>
-              <Button onClick={handleContinue} className="bg-blue-500 hover:bg-blue-600">
-                Continue
-              </Button>
-              <Button onClick={handleStop} variant="destructive" disabled={isSaving}>
-                {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                Stop
-              </Button>
-            </>
-          )}
-        </div>
+    <div className="space-y-4 bg-white p-6 rounded-lg shadow-lg">
+      <div className="flex space-x-4">
+        <Input
+          type="text"
+          placeholder="Filter by task or description"
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+          className="max-w-sm border-blue-300 focus:ring-blue-500 focus:border-blue-500"
+        />
+        <Select onValueChange={(value) => setSortBy(value as keyof TimeEntry)}>
+          <SelectTrigger className="w-[180px] border-blue-300 focus:ring-blue-500 focus:border-blue-500">
+            <SelectValue placeholder="Sort by" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="startTime">Start Time</SelectItem>
+            <SelectItem value="task">Task</SelectItem>
+            <SelectItem value="duration">Duration</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
+      <Table>
+        <TableHeader>
+          <TableRow className="bg-blue-50">
+            <TableHead className="text-blue-600">Task</TableHead>
+            <TableHead className="text-blue-600">Description</TableHead>
+            <TableHead className="text-blue-600">Start Time</TableHead>
+            <TableHead className="text-blue-600">End Time</TableHead>
+            <TableHead className="text-blue-600">Duration</TableHead>
+            <TableHead className="text-blue-600">Actions</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {sortedEntries.map((entry) => (
+            <TableRow key={entry.id} className="hover:bg-blue-50">
+              <TableCell>{entry.task}</TableCell>
+              <TableCell>{entry.description}</TableCell>
+              <TableCell>{formatDate(new Date(entry.startTime))}</TableCell>
+              <TableCell>{formatDate(new Date(entry.endTime))}</TableCell>
+              <TableCell>{formatTime(entry.duration)}</TableCell>
+              <TableCell>
+                <div className="flex space-x-2">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => onEdit(entry.id)}
+                    className="text-blue-500 hover:text-blue-600 hover:border-blue-600"
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => handleDelete(entry.id)}
+                    disabled={deletingId === entry.id}
+                    className="text-red-500 hover:text-red-600 hover:border-red-600"
+                  >
+                    {deletingId === entry.id ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Trash2 className="h-4 w-4" />
+                    )}
+                  </Button>
+                </div>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
     </div>
   )
 }
