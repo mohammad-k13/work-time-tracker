@@ -1,3 +1,5 @@
+"use client"
+
 import type React from "react"
 import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
@@ -5,9 +7,10 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { formatTime } from "../utils/timeUtils"
 import type { TimeEntry } from "../types/timeEntry"
+import { Loader2 } from "lucide-react"
 
 interface TimeTrackerProps {
-  onSave: (entry: Omit<TimeEntry, "id">) => void
+  onSave: (entry: Omit<TimeEntry, "id">) => Promise<void>
 }
 
 export const TimeTracker: React.FC<TimeTrackerProps> = ({ onSave }) => {
@@ -17,18 +20,22 @@ export const TimeTracker: React.FC<TimeTrackerProps> = ({ onSave }) => {
   const [description, setDescription] = useState("")
   const [startTime, setStartTime] = useState<Date | null>(null)
   const [duration, setDuration] = useState(0)
+  const [isSaving, setIsSaving] = useState(false)
   const intervalRef = useRef<NodeJS.Timeout | null>(null)
+  const [accumulatedDuration, setAccumulatedDuration] = useState(0)
 
   useEffect(() => {
     const storedState = localStorage.getItem("timeTrackerState")
     if (storedState) {
-      const { isTracking, isPaused, task, description, startTime, duration } = JSON.parse(storedState)
+      const { isTracking, isPaused, task, description, startTime, duration, accumulatedDuration } =
+        JSON.parse(storedState)
       setIsTracking(isTracking)
       setIsPaused(isPaused)
       setTask(task)
       setDescription(description)
       setStartTime(startTime ? new Date(startTime) : null)
-      setDuration(isTracking ? duration : 0) // Reset duration to 0 if not tracking
+      setDuration(isTracking ? duration : 0)
+      setAccumulatedDuration(accumulatedDuration || 0)
     }
   }, [])
 
@@ -37,7 +44,7 @@ export const TimeTracker: React.FC<TimeTrackerProps> = ({ onSave }) => {
       if (isTracking && !isPaused && startTime) {
         const now = new Date()
         const elapsedSeconds = Math.floor((now.getTime() - new Date(startTime).getTime()) / 1000)
-        setDuration(elapsedSeconds)
+        setDuration(accumulatedDuration + elapsedSeconds)
       }
     }
 
@@ -55,14 +62,14 @@ export const TimeTracker: React.FC<TimeTrackerProps> = ({ onSave }) => {
         clearInterval(intervalRef.current)
       }
     }
-  }, [isTracking, isPaused, startTime])
+  }, [isTracking, isPaused, startTime, accumulatedDuration])
 
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (!document.hidden && isTracking && !isPaused && startTime) {
         const now = new Date()
         const elapsedSeconds = Math.floor((now.getTime() - new Date(startTime).getTime()) / 1000)
-        setDuration(elapsedSeconds)
+        setDuration(accumulatedDuration + elapsedSeconds)
       }
     }
 
@@ -70,7 +77,7 @@ export const TimeTracker: React.FC<TimeTrackerProps> = ({ onSave }) => {
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange)
     }
-  }, [isTracking, isPaused, startTime])
+  }, [isTracking, isPaused, startTime, accumulatedDuration])
 
   useEffect(() => {
     localStorage.setItem(
@@ -82,70 +89,93 @@ export const TimeTracker: React.FC<TimeTrackerProps> = ({ onSave }) => {
         description,
         startTime: startTime?.toISOString(),
         duration,
+        accumulatedDuration,
       }),
     )
-  }, [isTracking, isPaused, task, description, startTime, duration])
+  }, [isTracking, isPaused, task, description, startTime, duration, accumulatedDuration])
 
   const handleStart = () => {
     const now = new Date()
     setIsTracking(true)
     setIsPaused(false)
     setStartTime(now)
-    setDuration(0) // Ensure duration is reset to 0
+    setDuration(0)
+    setAccumulatedDuration(0)
   }
 
   const handlePause = () => {
     setIsPaused(true)
+    setAccumulatedDuration(duration)
   }
 
   const handleContinue = () => {
     setIsPaused(false)
+    setStartTime(new Date())
   }
 
-  const handleStop = () => {
+  const handleStop = async () => {
     setIsTracking(false)
     setIsPaused(false)
     if (startTime) {
       const endTime = new Date()
-      onSave({
-        task,
-        description,
-        startTime: startTime.toISOString(),
-        endTime: endTime.toISOString(),
-        duration,
-      })
+      setIsSaving(true)
+      try {
+        await onSave({
+          task,
+          description,
+          startTime: startTime.toISOString(),
+          endTime: endTime.toISOString(),
+          duration,
+        })
+      } finally {
+        setIsSaving(false)
+      }
       setTask("")
       setDescription("")
       setStartTime(null)
       setDuration(0)
+      setAccumulatedDuration(0)
       localStorage.removeItem("timeTrackerState")
     }
   }
 
   return (
-    <div className="flex flex-col space-y-4 p-4 border rounded-lg">
+    <div className="flex flex-col space-y-4 p-6 border rounded-lg bg-white shadow-lg">
       <Input
         type="text"
         value={task}
         onChange={(e) => setTask(e.target.value)}
         placeholder="What are you working on?"
         disabled={isTracking}
+        className="border-blue-300 focus:ring-blue-500 focus:border-blue-500"
       />
       <Textarea
         value={description}
         onChange={(e) => setDescription(e.target.value)}
         placeholder="Add a description (optional)"
         disabled={isTracking}
+        className="border-blue-300 focus:ring-blue-500 focus:border-blue-500"
       />
-      <div className="flex justify-between items-center">
-        <span className="text-2xl font-bold font-mono">{formatTime(duration)}</span>
+      <div className="flex justify-between items-center bg-blue-50 p-4 rounded-lg">
+        <span className="text-3xl font-bold font-mono text-blue-600">{formatTime(duration)}</span>
         <div className="space-x-2">
-          {!isTracking && <Button onClick={handleStart}>Start</Button>}
-          {isTracking && !isPaused && <Button onClick={handlePause}>Pause</Button>}
+          {!isTracking && (
+            <Button onClick={handleStart} className="bg-green-500 hover:bg-green-600">
+              Start
+            </Button>
+          )}
+          {isTracking && !isPaused && (
+            <Button onClick={handlePause} className="bg-yellow-500 hover:bg-yellow-600">
+              Pause
+            </Button>
+          )}
           {isTracking && isPaused && (
             <>
-              <Button onClick={handleContinue}>Continue</Button>
-              <Button onClick={handleStop} variant="destructive">
+              <Button onClick={handleContinue} className="bg-blue-500 hover:bg-blue-600">
+                Continue
+              </Button>
+              <Button onClick={handleStop} variant="destructive" disabled={isSaving}>
+                {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                 Stop
               </Button>
             </>
